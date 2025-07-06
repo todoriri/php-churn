@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  annotations:
+    pv.kubernetes.io/provisioned-by: csi.nutanix.com
+    volume.kubernetes.io/provisioner-deletion-secret-name: nutanix-csi-driver-fc96704-provisioner
+    volume.kubernetes.io/provisioner-deletion-secret-namespace: nine-system
+  creationTimestamp: "2024-05-22T15:31:55Z"
+  finalizers:
+  - kubernetes.io/pv-protection
+  - external-attacher/csi-nutanix-com
+  name: pvc-0a2d49b6-4592-43bc-b2dc-8ee6c68411c1
+spec:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 8Gi
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    name: php-shared
+    namespace: <redacted>
+  csi:
+    controllerExpandSecretRef:
+      name: nutanix-csi-driver-fc96704-provisioner
+      namespace: nine-system
+    driver: csi.nutanix.com
+    fsType: ext4
+    nodePublishSecretRef:
+      name: nutanix-csi-driver-fc96704-node
+      namespace: nine-system
+    volumeAttributes:
+      description: PVC:php-shared, NS:<redacted>
+      nfsServer: nke.nutanixcluster03.nine.ch
+      nfsServerName: nke
+      nfsServerUUID: 7bbff1cc-7ae5-4f21-8349-a93c6138739f
+      provNFSShare: ENABLED
+      shareUUID: 64779959-6ac3-426b-a5d5-e7c728736373
+      storage.kubernetes.io/csiProvisionerIdentity: 1716341484525-8081-csi.nutanix.com
+      volumePath: pvc-0a2d49b6-4592-43bc-b2dc-8ee6c68411c1
+    volumeHandle: NutanixFiles-dynamic-N2JiZmYxY2MtN2FlNS00ZjIxLTgzNDktYTkzYzYxMzg3Mzlm-pvc-0a2d49b6-4592-43bc-b2dc-8ee6c68411c1
+  mountOptions:
+  - soft
+  - noatime
+  - timeo=150
+  - vers=4.1
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: files
+  volumeMode: Filesystem
+status:
+  phase: Bound

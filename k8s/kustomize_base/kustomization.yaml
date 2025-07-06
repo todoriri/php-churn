@@ -1,0 +1,30 @@
+# kustomize_base/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- pvc.yaml
+- worker.pod.yaml
+- php-config.yaml
+
+# These variables will be substituted by 'envsubst' in the run.sh script
+# before kustomize processes this file. Kustomize itself does not expand shell env vars.
+namespace: ${NAMESPACE_NAME}
+nameSuffix: "-${POD_SUFFIX}"
+
+patches:
+- target:
+    kind: Pod
+    name: worker # Targets the base pod named 'worker' from worker.pod.yaml
+  patch: |-
+    # This patch replaces the dummy command/args in worker.pod.yaml
+    # to run your entrypoint.sh script (where your main workload logic now resides).
+    - op: replace
+      path: /spec/containers/0/command
+      value:
+      - /bin/bash
+    - op: replace
+      path: /spec/containers/0/args
+      value:
+      - -c
+      - /usr/local/bin/entrypoint.sh

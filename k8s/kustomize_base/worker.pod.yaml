@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker # This is the base name. Kustomize will add -<suffix>
+  namespace: some-placeholder-namespace # Kustomize will set this
+spec:
+  priorityClassName: system-cluster-critical
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: nine-node-type
+            operator: In
+            values:
+            - customer
+  containers:
+  - name: php
+    command: ["/bin/bash", "-c"]
+    args: ["echo", "Initial args, will be replaced by Kustomize"]
+    env: null
+    image: ${WORKER_IMAGE}
+    imagePullPolicy: Always
+    livenessProbe:
+      exec:
+        command:
+        - /bin/bash
+        - -c
+        - ls /app/client_files && rm -f "/app/client_files/liveness_prob" && touch "/app/client_files/liveness_prob"
+      failureThreshold: 1
+      initialDelaySeconds: 20
+      periodSeconds: 30
+      successThreshold: 1
+      timeoutSeconds: 5
+    resources:
+      limits:
+        cpu: 600m
+        memory: 612Mi
+      requests:
+        cpu: 10m
+        memory: 32Mi
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /app/client_files
+      name: php-shared
+    - mountPath: /usr/local/etc/php/conf.d/default.ini
+      name: php-config
+      subPath: php_command.ini
+    - mountPath: /usr/local/etc/php-fpm.d/zz-docker.conf
+      name: php-config
+      subPath: php.fpf
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-5k7wm
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  # imagePullSecrets: # Uncomment and configure if truly needed for Quay.io, otherwise remove
+  # - name: acr-credentials
+  preemptionPolicy: PreemptLowerPriority
+  # priority: 0 # Ensure this line is ABSOLUTELY removed.
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  - key: nine-node-type
+    value: customer
+  - key: node-role.kubernetes.io/master # This is the crucial master toleration
+    operator: Exists
+    effect: NoSchedule
+  volumes:
+  - name: php-shared
+    persistentVolumeClaim:
+      claimName: php-shared
+  - configMap:
+      defaultMode: 420
+      name: php-config
+    name: php-config
+  - name: kube-api-access-5k7wm
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
