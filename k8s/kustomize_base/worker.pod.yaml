@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: worker # This is the base name. Kustomize will add -<suffix>
+  name: worker
   namespace: some-placeholder-namespace # Kustomize will set this
 spec:
   priorityClassName: system-cluster-critical
@@ -55,10 +55,7 @@ spec:
       readOnly: true
   dnsPolicy: ClusterFirst
   enableServiceLinks: true
-  # imagePullSecrets: # Uncomment and configure if truly needed for Quay.io, otherwise remove
-  # - name: acr-credentials
   preemptionPolicy: PreemptLowerPriority
-  # priority: 0 # Ensure this line is ABSOLUTELY removed.
   restartPolicy: Always
   schedulerName: default-scheduler
   securityContext: {}
@@ -76,7 +73,7 @@ spec:
     tolerationSeconds: 300
   - key: nine-node-type
     value: customer
-  - key: node-role.kubernetes.io/master # This is the crucial master toleration
+  - key: node-role.kubernetes.io/master
     operator: Exists
     effect: NoSchedule
   volumes:
