@@ -1,8 +1,7 @@
 #!/bin/bash
 
-set -x # Enable shell debugging - prints commands as they are executed
+set -x
 
-# Configuration for the test
 NUM_BATCHES=10
 NS_PER_BATCH=200
 TOTAL_NS=$((NUM_BATCHES * NS_PER_BATCH))
@@ -10,16 +9,12 @@ TOTAL_NS=$((NUM_BATCHES * NS_PER_BATCH))
 WAIT_AFTER_CREATE_SEC=300 # Time to let pods stabilize and write before deletion
 WAIT_AFTER_DELETE_SEC=30 # Time to allow CSI cleanup before next batch creation
 
-# These variables are no longer directly used for reading files in apply_kustomize_workload
-# Removed: PVC_TEMPLATE_FILE="kustomize_base/pvc.yaml"
-# Removed: POD_TEMPLATE_FILE="kustomize_base/worker.pod.yaml"
 
 CUSTOM_WORKER_IMAGE="quay.io/todor_nutanix/churn:churn-test"
 echo "--- Using Public Image: ${CUSTOM_WORKER_IMAGE} ---"
 
 TEMP_IMAGE_PUSH_PROJECT="image-push-temp-$RANDOM" # Using $RANDOM for uniqueness
 
-# This ensures all are removed when the script exits, regardless of where they are created.
 trap 'find /tmp -maxdepth 1 -type d -name "kustomize-*" -print0 | xargs -0 rm -rf' EXIT
 
 echo "--- Starting High-Churn NFS Volume Lifecycle Test (Image-based Workload) ---"
@@ -44,9 +39,7 @@ echo "Error: envsubst command not found. Please install gettext (e.g., 'sudo apt
 exit 1
 fi
 
-# =========================================================
-# Helper function to wait for a project to become available
-# =========================================================
+# wait for a project to become available
 wait_for_project() {
 local project_name=$1
 local max_retries=10
@@ -65,120 +58,9 @@ echo "Error: Project '$project_name' did not become ready after $max_retries att
 return 1 # Failure
 }
 
-# --- MODIFICATION START ---
-# Everything in "Phase 1" is now commented out or removed.
-# You will ensure the image is pushed to quay.io/todor_nutanix/churn:churn-test manually beforehand.
-# =========================================================
-# Phase 1: Build and Push Custom Image to OpenShift Internal Registry (BYPASSED)
-# =========================================================
-# echo "--- Phase 1: Building and Pushing Custom Image to Internal Registry ---"
-#
-# # 1. Get OpenShift Internal Registry Route
-# REGISTRY_ROUTE=$(oc get route default-route -n openshift-image-registry -o=jsonpath='{.spec.host}')
-# if [ -z "$REGISTRY_ROUTE" ]; then
-# echo "Error: OpenShift internal image registry route not found."
-# echo "You might need to expose it first: oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{\"spec\":{\"defaultRoute\":true}}' --type=merge"
-# echo "Then wait for the route to become available."
-# exit 1
-# fi
-# echo "Internal Registry Route: ${REGISTRY_ROUTE}"
-#
-# # 2. Create a temporary project for pushing the image
-# echo "Creating temporary project '$TEMP_IMAGE_PUSH_PROJECT' for image push (with retries)..."
-# PROJECT_CREATED=false
-# for (( retry=0; retry<5; retry++ )); do
-# if oc new-project "$TEMP_IMAGE_PUSH_PROJECT" >/dev/null 2>&1; then
-# echo "Attempt $((retry+1))/5: Initiated creation of project '$TEMP_IMAGE_PUSH_PROJECT'."
-# if wait_for_project "$TEMP_IMAGE_PUSH_PROJECT"; then
-# PROJECT_CREATED=true
-# break
-# fi
-# else
-# echo "Attempt $((retry+1))/5: Failed to initiate creation of project '$TEMP_IMAGE_PUSH_PROJECT'. Retrying in 5 seconds..."
-# sleep 5
-# if oc get project "$TEMP_IMAGE_PUSH_PROJECT" >/dev/null 2>&1; then
-# echo "Project '$TEMP_IMAGE_PUSH_PROJECT' already exists (was created during a previous attempt). Proceeding."
-# PROJECT_CREATED=true
-# break
-# fi
-# fi
-# done
-#
-# if ! $PROJECT_CREATED; then
-# echo "Fatal Error: Failed to create temporary project '$TEMP_IMAGE_PUSH_PROJECT' after multiple retries. Check permissions or quota."
-# exit 1
-# fi
-#
-# # Define the full internal registry image name including the project
-# CUSTOM_WORKER_IMAGE="${REGISTRY_ROUTE}/${TEMP_IMAGE_PUSH_PROJECT}/${INTERNAL_IMAGE_TAG}"
-# echo "Full Image Name for Push: ${CUSTOM_WORKER_IMAGE}"
-#
-# # 3. Log in to the Internal Registry
-# OC_TOKEN=$(oc whoami --show-token 2>/dev/null) # Fetch token, suppress stderr if not logged in
-# if [ -z "$OC_TOKEN" ]; then
-# echo "Error: Could not retrieve OpenShift authentication token. Please ensure you are logged in with 'oc login' (e.g., 'oc login --token=<your_token> --server=<your_api_server>')."
-# exit 1
-# fi
-#
-# echo "Logging into internal registry with Podman (with retries)..."
-# LOGIN_SUCCESS=false
-# for (( retry=0; retry<3; retry++ )); do
-# if echo "${OC_TOKEN}" | podman login --tls-verify=false -u unused --password-stdin "${REGISTRY_ROUTE}"; then
-# echo "Login to internal registry successful."
-# LOGIN_SUCCESS=true
-# break
-# else
-# echo "Attempt $((retry+1))/3: Failed to log in to OpenShift internal registry. Retrying in 5 seconds..."
-# sleep 5
-# fi
-# done
-#
-# if ! $LOGIN_SUCCESS; then
-# echo "Fatal Error: Failed to log in to OpenShift internal registry after multiple retries."
-# exit 1
-# fi
-#
-# # 4. Build the custom writer image locally
-# echo "Building local image from 'simple_writer_image/' directory..."
-# if ! podman build -t local-simple-writer-build:latest ../k8s/app; then
-# echo "Error: Podman build failed. Check Dockerfile and simple_writer_image/ contents."
-# exit 1
-# fi
-# echo "Local image 'local-simple-writer-build:latest' build successful."
-#
-# # 5. Tag the locally built image for the internal registry
-# echo "Tagging local image for internal registry: local-simple-writer-build:latest -> ${CUSTOM_WORKER_IMAGE}"
-# if ! podman tag local-simple-writer-build:latest "${CUSTOM_WORKER_IMAGE}"; then
-# echo "Error: Podman tagging failed."
-# exit 1
-# fi
-# echo "Image tagged successfully."
-#
-# # 6. Push the image to the internal registry
-# echo "Pushing image to internal registry: ${CUSTOM_WORKER_IMAGE} (with retries)..."
-# PUSH_SUCCESS=false
-# for (( retry=0; retry<3; retry++ )); do
-# if podman push --tls-verify=false "${CUSTOM_WORKER_IMAGE}"; then
-# echo "Image pushed successfully to ${CUSTOM_WORKER_IMAGE}"
-# PUSH_SUCCESS=true
-# break
-# else
-# echo "Attempt $((retry+1))/3: Podman push to internal registry failed. Retrying in 10 seconds..."
-# sleep 10
-# fi
-# done
-#
-# if ! $PUSH_SUCCESS; then
-# echo "Fatal Error: Failed to push image to internal registry after multiple retries."
-# exit 1
-# fi
-#
-# echo "--- Phase 1: Custom Image Ready for Use in Cluster ---"
-# --- MODIFICATION END ---
 
 
-# =========================================================
-# Phase 2: Apply Workload Manifests using Kustomize (High-Churn Test)
+# Apply Workload Manifests using Kustomize 
 # =========================================================
 echo "--- Phase 2: Applying Workload Manifests using Kustomize ---"
 
@@ -188,21 +70,17 @@ local ns_name=$1
 local pod_suffix=$2
 local worker_image=$3 # This is CUSTOM_WORKER_IMAGE from Phase 1
 
-# Create a temporary directory for Kustomize overlay for this specific namespace
+# Create a temporary directory for overlay
 local TEMP_OVERLAY_DIR=$(mktemp -d -t kustomize-XXXXXXXXXX)
-# The 'trap' for rm -rf is now global, handled at script start. No need for local trap.
 
-# Copy your kustomize_base files into the temporary directory
+# Copy kustomize_base files into temp
 cp kustomize_base/pvc.yaml "$TEMP_OVERLAY_DIR/"
 cp kustomize_base/worker.pod.yaml "$TEMP_OVERLAY_DIR/"
 cp kustomize_base/kustomization.yaml "$TEMP_OVERLAY_DIR/"
 cp kustomize_base/php-config.yaml "$TEMP_OVERLAY_DIR/"
 
-# --- MODIFICATION START ---
-# Since CUSTOM_WORKER_IMAGE is now set directly to Quay.io image,
-# this envsubst is largely redundant for its *value*, but the image parameter
-# in worker.pod.yaml still needs to be substituted.
-# This block effectively replaces the ${WORKER_IMAGE} placeholder.
+
+# replace the ${WORKER_IMAGE} placeholder.
 export WORKER_IMAGE="$worker_image" # Make it available for envsubst
 cat "${TEMP_OVERLAY_DIR}/worker.pod.yaml" | envsubst '${WORKER_IMAGE}' > "${TEMP_OVERLAY_DIR}/worker.pod.yaml.tmp" && \
 mv "${TEMP_OVERLAY_DIR}/worker.pod.yaml.tmp" "${TEMP_OVERLAY_DIR}/worker.pod.yaml"
@@ -210,9 +88,6 @@ unset WORKER_IMAGE # Unset to avoid interfering with next iterations
 # --- MODIFICATION END ---
 
 
-# --- Substitute NAMESPACE_NAME and POD_SUFFIX into kustomization.yaml ---
-# This is crucial because Kustomize's 'namespace' and 'nameSuffix' directives
-# do NOT perform shell variable expansion. We must envsubst them here.
 export NAMESPACE_NAME="$ns_name"
 export POD_SUFFIX="$pod_suffix"
 cat "${TEMP_OVERLAY_DIR}/kustomization.yaml" | envsubst '${NAMESPACE_NAME} ${POD_SUFFIX}' > "${TEMP_OVERLAY_DIR}/kustomization.yaml.tmp" && \
@@ -221,13 +96,13 @@ unset NAMESPACE_NAME POD_SUFFIX # Unset after use in this function
 
 echo " - Building and applying Kustomize manifests for namespace: $ns_name (Pod suffix: $pod_suffix)"
 
-# Build the Kustomize manifest for this specific instance and apply it
+# build Kustomize manifest for specific instance 
 echo "--- Generated Kustomize YAML for $ns_name ---"
 GENERATED_KUSTOMIZE_YAML=$(oc kustomize "$TEMP_OVERLAY_DIR")
 echo "$GENERATED_KUSTOMIZE_YAML" # This will print the full generated YAML to stdout
 echo "-------------------------------------------"
 
-# Now attempt to apply it
+# apply it
 # This line will show the error if oc apply fails
 if ! echo "$GENERATED_KUSTOMIZE_YAML" | oc apply -f -; then
 echo "Error: Failed to apply Kustomize manifests for namespace '$ns_name'."
@@ -258,7 +133,7 @@ if oc get project "$NS_NAME" >/dev/null 2>&1; then
 echo " - Namespace '$NS_NAME' already exists. Proceeding with wait."
 else
 echo " - Error: Failed to initiate creation of namespace '$NS_NAME'. Check permissions or quota. Skipping to next namespace."
-continue # Skip to next iteration if project creation cannot even be initiated
+continue
 fi
 fi
 
@@ -270,10 +145,9 @@ continue # Skip to next namespace creation if wait fails
 fi
 
 # Now, call the Kustomize application function
-if $NAMESPACE_CREATED; then # Only apply workload if namespace was successfully created/found
+if $NAMESPACE_CREATED; then # Only apply if namespace created/found
 if ! apply_kustomize_workload "$NS_NAME" "$POD_SUFFIX" "$CUSTOM_WORKER_IMAGE"; then
 echo "Warning: Workload application failed for $NS_NAME. This namespace might not have an active pod."
-# Don't exit here, let the script continue to try other namespaces
 fi
 fi
 done
@@ -282,8 +156,7 @@ echo "Waiting $WAIT_AFTER_CREATE_SEC seconds for pods to become Running and gene
 sleep $WAIT_AFTER_CREATE_SEC
 
 
-# Verification loop - improved for clarity and robustness
-# Verifying PVCs and Pods are ready for Batch $batch_num (using NS_INDEX from this batch)
+# verifying PVCs and Pods are ready
 echo "Verifying PVCs and Pods are ready for Batch $batch_num..."
 for i in $(seq 1 $NS_PER_BATCH); do # Iterate using the inner loop counter
     # Calculate the correct NS_INDEX for this pod in this batch
@@ -318,7 +191,7 @@ for i in $(seq 1 $NS_PER_BATCH); do # Iterate using the inner loop counter
         continue # Skip pod check if PVC is not ready
     fi
 
-    # Wait for Pod to be Running (only if PVC is ready)
+    # wait for pod to be Running if pvc is ready
     if $PVC_READY; then
         for ((retry=0; retry<15; retry++)); do # Max 15 retries
             POD_STATUS=$(oc get pod -n "$NS_NAME" "$POD_NAME" -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound")
@@ -342,7 +215,7 @@ for i in $(seq 1 $NS_PER_BATCH); do # Iterate using the inner loop counter
 done
 
 echo "--- Phase 3: Initiating Concurrent Deletion of Batch $batch_num ---"
-# Execute deletion commands in parallel
+# deletion commands in parallel
 for ns in "${current_namespaces[@]}"; do
 echo " - Deleting project $ns"
 oc delete project "$ns" --grace-period=0 --force --wait=false &
@@ -352,14 +225,14 @@ wait # Wait for all `oc delete project` commands to be submitted
 echo "Deletion commands initiated. Waiting $WAIT_AFTER_DELETE_SEC seconds for CSI driver cleanup and Ganesha activity..."
 sleep $WAIT_AFTER_DELETE_SEC
 
-# Optional: Check for stuck resources after deletion
+# check for stuck resources after deletion
 echo "Checking for stuck PVCs/PVs (status: Terminating)..."
 oc get pvc -A --field-selector=status.phase=Terminating
 oc get pv -A --field-selector=status.phase=Terminating
 
 done
 
-# Optional: Clean up the temporary image push project after all batches are done
+# Clean up the temporary image push project after all batches are done
 echo "--- Cleaning up temporary image push project '$TEMP_IMAGE_PUSH_PROJECT' ---"
 oc delete project "$TEMP_IMAGE_PUSH_PROJECT" --wait=false || true
 
@@ -375,15 +248,13 @@ resources:
 - worker.pod.yaml
 - php-config.yaml
 
-# These variables will be substituted by 'envsubst' in the run.sh script
-# before kustomize processes this file. Kustomize itself does not expand shell env vars.
 namespace: ${NAMESPACE_NAME}
 nameSuffix: "-${POD_SUFFIX}"
 
 patches:
 - target:
 kind: Pod
-name: worker # Targets the base pod named 'worker' from worker.pod.yaml
+name: worker
 patch: |-
 # This patch replaces the dummy command/args in worker.pod.yaml
 # to run your entrypoint.sh script (where your main workload logic now resides).
@@ -401,7 +272,7 @@ value:
 apiVersion: v1
 kind: Pod
 metadata:
-name: worker # Base name. Kustomize will add -<suffix>
+name: worker
 namespace: some-placeholder-namespace # Kustomize will set this
 spec:
 affinity:
@@ -414,11 +285,11 @@ operator: In
 values:
 - customer
 containers:
-- name: php # Make sure this name is correct if your patch targets it explicitly by name
+- name: php
 command: ["/bin/bash", "-c"] # Dummy command, to be replaced by Kustomize patch
 args: ["echo", "Initial args, will be replaced by Kustomize"] # Dummy args, to be replaced by Kustomize patch
 env: null
-image: ${WORKER_IMAGE} # This placeholder is still good for envsubst in run.sh for image only
+image: ${WORKER_IMAGE}
 imagePullPolicy: Always
 livenessProbe:
 exec:
@@ -518,11 +389,11 @@ volumeMode: Filesystem
 
 echo "Starting simple continuous writer."
 
-# Define paths for log files within the mounted volume
-VOLUME_PATH="/app/client_files" # This should match your volumeMount in worker.pod.yaml
+# path for log files within the mounted volume
+VOLUME_PATH="/app/client_files"
 
-# POD_NAME and NAMESPACE_NAME will be injected via Downward API in the Pod spec.
-# Provide defaults for local testing if running without Kubernetes.
+
+# defaults for local testing.
 POD_NAME_VAR="${POD_NAME:-unknown-pod}"
 NAMESPACE_NAME_VAR="${NAMESPACE_NAME:-unknown-namespace}"
 
@@ -534,10 +405,10 @@ echo "Writer: Error log will be: $ERROR_FILE"
 
 COUNTER=0
 while true; do
-# Attempt to write data to the log file on the mounted volume
+# write data to the log file on the mounted volume
 if echo "$(date +%Y-%m-%dT%H:%M:%S%Z) - Pod ${POD_NAME_VAR} in ${NAMESPACE_NAME_VAR} writing data. Loop count: $COUNTER" >> "$LOG_FILE"; then
 # Keep log file size manageable (last 1000 lines)
-tail -n 1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE" 2>/dev/null || true # Suppress errors if mv fails due to unmount
+tail -n 1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE" 2>/dev/null || true
 else
 echo "$(date +%Y-%m-%dT%H:%M:%S%Z) - Error writing to $LOG_FILE. Volume likely unmounted or inaccessible." >> "$ERROR_FILE"
 fi
@@ -550,11 +421,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
 name: php-config
-# Kustomize will inject the namespace here based on kustomization.yaml
 data:
 php_command.ini: |
-# Example content for php_command.ini
-# You can customize this as needed for your PHP application
 display_errors = On
 log_errors = On
 error_reporting = E_ALL
@@ -563,8 +431,6 @@ memory_limit = 512M
 upload_max_filesize = 100M
 post_max_size = 100M
 php.fpf: |
-# Example content for php.fpf (PHP-FPM configuration)
-# Customize as needed
 [global]
 error_log = /proc/self/fd/2 ; Redirect FPM errors to stderr (container logs)
 daemonize = no ; Do not daemonize, let Kubernetes manage process
