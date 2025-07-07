@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: worker
-  namespace: some-placeholder-namespace # Kustomize will set this
+  namespace: some-placeholder-namespace
 spec:
   priorityClassName: system-cluster-critical
   affinity:
