@@ -2,7 +2,7 @@
 
 echo "Starting simple continuous writer and reader."
 
-VOLUME_PATH="/app/client_files" # This should match your volumeMount in worker.pod.yaml
+VOLUME_PATH="/app/client_files"
 
 POD_NAME_VAR="${POD_NAME:-unknown-pod}"
 NAMESPACE_NAME_VAR="${NAMESPACE_NAME:-unknown-namespace}"
@@ -20,7 +20,7 @@ while true; do
   # --- WRITE OPERATION ---
   if echo "$(date +%Y-%m-%dT%H:%M:%S%Z) - Pod ${POD_NAME_VAR} in ${NAMESPACE_NAME_VAR} writing data. Loop count: $COUNTER" >> "$LOG_FILE"; then
     # Keep log file size manageable (last 1000 lines)
-    tail -n 1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE" 2>/dev/null || true # Suppress errors if mv fails due to unmount
+    tail -n 1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE" 2>/dev/null || true
   else
     echo "$(date +%Y-%m-%dT%H:%M:%S%Z) - Error writing to $LOG_FILE. Volume likely unmounted or inaccessible." >> "$ERROR_FILE"
   fi
